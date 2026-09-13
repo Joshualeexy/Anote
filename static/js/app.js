@@ -13,9 +13,22 @@ let stagedImages = [];
 let allData = {};
 let userTimestamps = {};
 let currentBrowsePath = '';
+let browseEntries = [];
+
+// Device identity management
+let userName = localStorage.getItem('anote_user_name');
+if (!userName) {
+    userName = 'Device-' + (clientIp.split('.').pop() || '1');
+    localStorage.setItem('anote_user_name', userName);
+}
 
 function getEl(id) {
     return document.getElementById(id);
+}
+
+function updateProfileUI() {
+    const el = getEl('profileName');
+    if (el) el.textContent = userName;
 }
 
 function playChime() {
@@ -71,10 +84,12 @@ function showToast(message, type = 'info') {
     const container = getEl('toastContainer');
     if (!container) return;
     const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
+    toast.className = `toast ${type} show`;
     toast.textContent = message;
+    toast.onclick = () => toast.remove();
     container.appendChild(toast);
     setTimeout(() => {
+        toast.classList.remove('show');
         toast.style.opacity = '0';
         toast.style.transform = 'translateY(10px)';
         setTimeout(() => toast.remove(), 300);
@@ -91,17 +106,53 @@ function escapeHtml(str) {
         .replace(/'/g, "&#039;");
 }
 
+function renderIpBadges() {
+    const ipList = getEl('ipList');
+    if (!ipList) return;
+    ipList.innerHTML = '';
+    
+    const displayIps = ips.length > 0 ? ips : [clientIp];
+    displayIps.forEach(ip => {
+        const badge = document.createElement('span');
+        badge.className = 'ip-badge';
+        badge.textContent = `http://${ip}:${port}`;
+        badge.title = 'Click to copy URL';
+        badge.onclick = () => {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(badge.textContent).then(() => {
+                    showToast('URL copied to clipboard!', 'success');
+                }).catch(() => {
+                    showToast('Copied: ' + badge.textContent, 'info');
+                });
+            } else {
+                showToast('URL: ' + badge.textContent, 'info');
+            }
+        };
+        ipList.appendChild(badge);
+    });
+}
+
+// File and Image Handling Logic
 function handleFiles(files) {
     if (!files || !files.length) return;
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!file.type.startsWith('image/')) continue;
+    const fileArray = Array.from(files);
+    let imageCount = 0;
+
+    fileArray.forEach(file => {
+        if (!file || !file.type || !file.type.startsWith('image/')) return;
+        imageCount++;
         const reader = new FileReader();
         reader.onload = (e) => {
-            stagedImages.push(e.target.result);
-            renderStagedImages();
+            if (e.target && e.target.result) {
+                stagedImages.push(e.target.result);
+                renderStagedImages();
+            }
         };
         reader.readAsDataURL(file);
+    });
+
+    if (imageCount > 0) {
+        showToast(`Attached ${imageCount} image${imageCount > 1 ? 's' : ''}! 🖼️`, 'success');
     }
 }
 
@@ -110,13 +161,13 @@ function renderStagedImages() {
     if (!container) return;
     container.innerHTML = '';
     stagedImages.forEach((b64, idx) => {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'staged-thumb-wrapper';
-        wrapper.innerHTML = `
-            <img src="${b64}" class="staged-thumb" />
-            <button type="button" class="remove-staged-btn" onclick="removeStaged(${idx})">&times;</button>
+        const card = document.createElement('div');
+        card.className = 'staged-img-card';
+        card.innerHTML = `
+            <img src="${b64}" alt="Staged image" />
+            <button type="button" class="remove-staged-btn" onclick="removeStaged(${idx})" title="Remove image">&times;</button>
         `;
-        container.appendChild(wrapper);
+        container.appendChild(card);
     });
 }
 
@@ -125,17 +176,68 @@ function removeStaged(idx) {
     renderStagedImages();
 }
 
+// Clipboard Paste Handler (handles screenshots, copied web images, & dataTransfer items)
 window.addEventListener('paste', (e) => {
-    if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length) {
-        handleFiles(e.clipboardData.files);
+    const clipboardData = e.clipboardData || (e.originalEvent && e.originalEvent.clipboardData);
+    if (!clipboardData) return;
+
+    const filesToHandle = [];
+
+    // 1. Inspect items (covers clipboard screenshots, Snipping Tool, and copied images)
+    if (clipboardData.items && clipboardData.items.length) {
+        for (let i = 0; i < clipboardData.items.length; i++) {
+            const item = clipboardData.items[i];
+            if (item.type && item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                if (file) filesToHandle.push(file);
+            }
+        }
+    }
+
+    // 2. Fallback to clipboardData.files if items array yielded no images
+    if (filesToHandle.length === 0 && clipboardData.files && clipboardData.files.length) {
+        for (let i = 0; i < clipboardData.files.length; i++) {
+            const file = clipboardData.files[i];
+            if (file.type && file.type.startsWith('image/')) {
+                filesToHandle.push(file);
+            }
+        }
+    }
+
+    if (filesToHandle.length > 0) {
+        e.preventDefault();
+        handleFiles(filesToHandle);
     }
 });
 
+// Drag and drop image handling
 window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => {
     e.preventDefault();
-    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
-        handleFiles(e.dataTransfer.files);
+    const dataTransfer = e.dataTransfer;
+    if (!dataTransfer) return;
+
+    const filesToHandle = [];
+    if (dataTransfer.files && dataTransfer.files.length) {
+        for (let i = 0; i < dataTransfer.files.length; i++) {
+            if (dataTransfer.files[i].type && dataTransfer.files[i].type.startsWith('image/')) {
+                filesToHandle.push(dataTransfer.files[i]);
+            }
+        }
+    }
+    if (filesToHandle.length > 0) {
+        handleFiles(filesToHandle);
+    }
+});
+
+// Keyboard shortcut (Ctrl+S / Cmd+S to submit snippet)
+document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        const composerInput = getEl('composerInput');
+        if (document.activeElement === composerInput || stagedImages.length > 0) {
+            e.preventDefault();
+            sendPost();
+        }
     }
 });
 
@@ -166,6 +268,7 @@ function renderDeviceList() {
 
     const users = Object.keys(allData);
     if (!users.includes('Global')) users.unshift('Global');
+    if (!users.includes(userName)) users.push(userName);
 
     users.forEach(u => {
         const items = allData[u] || [];
@@ -174,13 +277,23 @@ function renderDeviceList() {
         item.className = `device-item ${u === activeUser ? 'active' : ''}`;
         item.onclick = () => selectUser(u);
 
-        const customName = localStorage.getItem(`anote_devicename_${u}`) || u;
+        const isMe = (u === userName);
+        const deleteBtnHtml = (u !== 'Global') 
+            ? `<button type="button" class="delete-device-btn" onclick="event.stopPropagation(); deleteDeviceUser('${escapeHtml(u)}')" title="Delete device box">&times;</button>` 
+            : '';
+
         item.innerHTML = `
-            <div class="device-icon">${u === 'Global' ? '🌐' : '📱'}</div>
-            <div class="device-info">
-                <div class="device-name">${escapeHtml(customName)}</div>
-                <div class="device-meta">${count} item${count === 1 ? '' : 's'}</div>
+            <div class="device-header-row">
+                <div class="device-name-container">
+                    <span class="device-icon">${u === 'Global' ? '🌐' : '📱'}</span>
+                    <span class="device-name">${escapeHtml(u)}</span>
+                    ${isMe ? '<span class="me-badge">You</span>' : ''}
+                </div>
             </div>
+            <div class="device-meta">
+                <span>${count} item${count === 1 ? '' : 's'}</span>
+            </div>
+            ${deleteBtnHtml}
         `;
         listEl.appendChild(item);
     });
@@ -194,6 +307,25 @@ function selectUser(u) {
     renderFeed();
 }
 
+async function deleteDeviceUser(u) {
+    if (u === 'Global') return;
+    if (!confirm(`Delete device box "${u}" and all its items?`)) return;
+    try {
+        const res = await fetch('/api/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user: u })
+        });
+        if (res.ok) {
+            showToast(`Deleted device box "${u}"`, 'info');
+            if (activeUser === u) {
+                selectUser('Global');
+            }
+            fetchAllClipboardData();
+        }
+    } catch (e) {}
+}
+
 function renderFeed() {
     const feed = getEl('feedContainer');
     if (!feed) return;
@@ -202,10 +334,10 @@ function renderFeed() {
     const items = allData[activeUser] || [];
     if (items.length === 0) {
         feed.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">📋</div>
-                <div class="empty-title">No Clipboard Items Yet</div>
-                <div class="empty-desc">Paste text, drop images, or type above to share across your network.</div>
+            <div class="empty-feed">
+                <div style="font-size: 32px; margin-bottom: 8px;">📋</div>
+                <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">No Clipboard Items Yet</div>
+                <div>Paste text, attach photos/files, or type above to share across your network.</div>
             </div>
         `;
         return;
@@ -213,29 +345,33 @@ function renderFeed() {
 
     items.forEach(item => {
         const card = document.createElement('div');
-        card.className = 'item-card';
+        card.className = 'feed-card';
         const timeAgo = formatTimeAgo(item.timestamp);
         
         let imagesHtml = '';
         if (item.images && item.images.length) {
-            imagesHtml = '<div class="image-grid">';
+            imagesHtml = '<div class="feed-gallery">';
             item.images.forEach(imgUrl => {
-                imagesHtml += `<img src="${imgUrl}" onclick="openLightbox('${imgUrl}')" loading="lazy" />`;
+                imagesHtml += `
+                    <div class="gallery-item" onclick="openLightbox('${imgUrl}')">
+                        <img src="${imgUrl}" loading="lazy" alt="Clipboard attachment" />
+                    </div>
+                `;
             });
             imagesHtml += '</div>';
         }
 
-        const textHtml = item.text ? `<div class="item-text">${escapeHtml(item.text)}</div>` : '';
+        const textHtml = item.text ? `<div class="feed-text">${escapeHtml(item.text)}</div>` : '';
 
         card.innerHTML = `
-            <div class="item-header">
-                <div class="item-author">
-                    <span class="author-badge">${escapeHtml(item.ip || '127.0.0.1')}</span>
-                    <span class="item-time">${timeAgo}</span>
+            <div class="feed-card-header">
+                <div class="feed-card-user">
+                    <span>${escapeHtml(item.ip || '127.0.0.1')}</span>
+                    <span style="font-weight: normal; color: var(--text-secondary);">${timeAgo}</span>
                 </div>
-                <div class="item-actions">
-                    ${item.text ? `<button class="copy-btn" onclick="copyText('${escapeHtml(item.text).replace(/'/g, "\'")}')">📋 Copy</button>` : ''}
-                    <button class="delete-btn" onclick="deleteItem('${item.id}')">&times;</button>
+                <div class="feed-card-actions">
+                    ${item.text ? `<button type="button" class="btn-secondary btn-sm" onclick="copyText(${JSON.stringify(item.text)})">📋 Copy</button>` : ''}
+                    <button type="button" class="delete-item-btn" onclick="deleteItem('${item.id}')" title="Delete item">&times;</button>
                 </div>
             </div>
             ${textHtml}
@@ -271,7 +407,7 @@ async function sendPost() {
             if (textEl) textEl.value = '';
             stagedImages = [];
             renderStagedImages();
-            showToast('Posted to clipboard!', 'success');
+            showToast('Posted to shared clipboard!', 'success');
             playChime();
             fetchAllClipboardData();
         } else {
@@ -298,11 +434,15 @@ async function deleteItem(itemId) {
 
 function copyText(text) {
     if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-        showToast('Copied to clipboard! 📋', 'success');
-    }).catch(() => {
-        showToast('Failed to copy', 'error');
-    });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('Copied to clipboard! 📋', 'success');
+        }).catch(() => {
+            showToast('Failed to copy text', 'error');
+        });
+    } else {
+        showToast('Clipboard API unavailable', 'error');
+    }
 }
 
 function openLightbox(url) {
@@ -310,13 +450,43 @@ function openLightbox(url) {
     const img = getEl('lightboxImg');
     if (lightbox && img) {
         img.src = url;
-        lightbox.classList.add('active');
+        lightbox.style.display = 'flex';
     }
 }
 
 function closeLightbox() {
     const lightbox = getEl('lightbox');
-    if (lightbox) lightbox.classList.remove('active');
+    if (lightbox) lightbox.style.display = 'none';
+}
+
+function openRenameModal() {
+    const modal = getEl('renameModal');
+    const input = getEl('deviceNameInput');
+    if (modal && input) {
+        input.value = userName;
+        modal.style.display = 'flex';
+        input.focus();
+    }
+}
+
+function closeRenameModal() {
+    const modal = getEl('renameModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function saveDeviceName() {
+    const input = getEl('deviceNameInput');
+    if (input) {
+        const val = input.value.trim();
+        if (val) {
+            userName = val;
+            localStorage.setItem('anote_user_name', userName);
+            updateProfileUI();
+            renderDeviceList();
+            showToast('Device name saved', 'success');
+        }
+    }
+    closeRenameModal();
 }
 
 async function loadBrowsePath(path = '') {
@@ -331,8 +501,9 @@ async function loadBrowsePath(path = '') {
             return;
         }
         const data = await res.json();
+        browseEntries = data.entries || [];
         renderBreadcrumbs(data.breadcrumbs || []);
-        renderBrowseTable(data.entries || [], data.parent_path);
+        renderBrowseTable(browseEntries, data.parent_path);
     } catch (e) {
         body.innerHTML = `<tr><td colspan="4" class="text-center p-4">Network error loading directory</td></tr>`;
     }
@@ -344,14 +515,14 @@ function renderBreadcrumbs(crumbs) {
     bar.innerHTML = '';
     crumbs.forEach((c, idx) => {
         const span = document.createElement('span');
-        span.className = 'crumb-item';
+        span.className = 'breadcrumb-item';
         span.textContent = c.name;
         span.onclick = () => loadBrowsePath(c.path);
         bar.appendChild(span);
 
         if (idx < crumbs.length - 1) {
             const sep = document.createElement('span');
-            sep.className = 'crumb-sep';
+            sep.className = 'breadcrumb-sep';
             sep.textContent = '/';
             bar.appendChild(sep);
         }
@@ -365,7 +536,7 @@ function renderBrowseTable(entries, parentPath) {
 
     if (parentPath !== null && parentPath !== undefined) {
         const tr = document.createElement('tr');
-        tr.className = 'folder-row';
+        tr.className = 'file-row is-folder';
         tr.onclick = () => loadBrowsePath(parentPath);
         tr.innerHTML = `
             <td colspan="4" style="cursor:pointer; font-weight:600; color:var(--accent);">
@@ -376,35 +547,49 @@ function renderBrowseTable(entries, parentPath) {
     }
 
     if (entries.length === 0) {
-        body.innerHTML += `<tr><td colspan="4" class="text-center p-4">Folder is empty</td></tr>`;
+        body.innerHTML += `<tr><td colspan="4" style="text-align: center; padding: 25px; color: var(--text-secondary);">Folder is empty</td></tr>`;
         return;
     }
 
     entries.forEach(item => {
         const tr = document.createElement('tr');
         if (item.is_dir) {
-            tr.className = 'folder-row';
+            tr.className = 'file-row is-folder';
             tr.onclick = () => loadBrowsePath(item.rel_path);
             tr.innerHTML = `
-                <td>📁 <strong>${escapeHtml(item.name)}</strong></td>
+                <td class="file-name-cell">📁 <strong>${escapeHtml(item.name)}</strong></td>
                 <td>Folder</td>
-                <td>${item.item_count || 0} items</td>
                 <td>${item.mtime_fmt || ''}</td>
+                <td class="file-actions-cell">
+                    <button type="button" class="btn-secondary btn-sm" onclick="event.stopPropagation(); loadBrowsePath('${escapeHtml(item.rel_path)}')">Open</button>
+                </td>
             `;
         } else {
             tr.className = 'file-row';
             tr.innerHTML = `
-                <td>📄 ${escapeHtml(item.name)}</td>
+                <td class="file-name-cell">📄 ${escapeHtml(item.name)}</td>
                 <td>${item.size_fmt || ''}</td>
-                <td>
-                    <a href="${item.stream_url}" target="_blank" class="action-btn">View</a>
-                    <a href="${item.download_url}" download class="action-btn">Download</a>
-                </td>
                 <td>${item.mtime_fmt || ''}</td>
+                <td class="file-actions-cell">
+                    <a href="${item.stream_url}" target="_blank" class="btn-secondary btn-sm" style="text-decoration:none;">View</a>
+                    <a href="${item.download_url}" download class="btn-success btn-sm" style="text-decoration:none;">Download</a>
+                </td>
             `;
         }
         body.appendChild(tr);
     });
+}
+
+function filterBrowseTable() {
+    const input = getEl('fileSearchInput');
+    if (!input) return;
+    const query = input.value.toLowerCase().trim();
+    if (!query) {
+        renderBrowseTable(browseEntries, currentBrowsePath ? (currentBrowsePath.includes('/') ? currentBrowsePath.substring(0, currentBrowsePath.lastIndexOf('/')) : '') : null);
+        return;
+    }
+    const filtered = browseEntries.filter(e => e.name && e.name.toLowerCase().includes(query));
+    renderBrowseTable(filtered, null);
 }
 
 async function checkClipboardUpdate() {
@@ -434,6 +619,20 @@ async function checkClipboardUpdate() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    updateProfileUI();
+    renderIpBadges();
+
+    // Attach listener for photos/files selection button
+    const fileInput = getEl('fileInput');
+    if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length) {
+                handleFiles(e.target.files);
+                fileInput.value = '';
+            }
+        });
+    }
+
     switchTab(currentTab);
     fetchAllClipboardData();
     setInterval(checkClipboardUpdate, 3000);

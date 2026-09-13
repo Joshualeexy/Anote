@@ -1,3 +1,14 @@
 {
-    "Global": []
+    "Global": [
+        {
+            "id": "item_1789327755186_0b4d",
+            "text": "",
+            "images": [
+                "/uploads/img_1789327755172_7cbc57.jpg",
+                "/uploads/img_1789327755186_2d7095.jpg"
+            ],
+            "timestamp": 1789327755186,
+            "ip": "172.20.10.1"
+        }
+    ]
 }
