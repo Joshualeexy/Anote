@@ -70,6 +70,17 @@ class ClipboardHTTPRequestHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(clipboards).encode("utf-8"))
 
+        elif path == "/api/status":
+            status_data = {
+                "status": "online",
+                "users": {u: {"timestamp": items[0]["timestamp"] if items else 0, "count": len(items)} for u, items in clipboards.items()}
+            }
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(json.dumps(status_data).encode("utf-8"))
+            
         elif path == "/api/videos":
             query = urllib.parse.parse_qs(parsed.query)
             search_dir = query.get("dir", [None])[0]

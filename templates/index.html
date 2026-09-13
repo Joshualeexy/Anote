@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Anote - LAN Clipboard & AI Video Hub</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📋</text></svg>">
+    <title>Anote - Personal LAN Clipboard & File Explorer</title>
     <link rel="stylesheet" href="/static/css/main.css">
 </head>
 <body>
@@ -24,10 +25,6 @@
             <div class="nav-tabs">
                 <button class="nav-tab active" id="tabBtnClipboard" onclick="switchTab('clipboard')">
                     📋 Clipboard
-                </button>
-                <button class="nav-tab" id="tabBtnVideos" onclick="switchTab('videos')">
-                    🎬 AI Video Hub
-                    <span class="nav-badge live-glow" id="videoCountBadge">Live</span>
                 </button>
                 <button class="nav-tab" id="tabBtnBrowser" onclick="switchTab('browser')">
                     📁 Browse PC
@@ -88,93 +85,7 @@
             </div>
         </div>
 
-        <!-- ================= TAB 2: AI VIDEO HUB ================= -->
-        <div class="tab-view" id="tabViewVideos">
-            <div class="video-hub-container">
-                <!-- Status Bar -->
-                <div class="watcher-status-bar">
-                    <div class="watcher-info">
-                        <div class="pulse-indicator">
-                            <div class="pulse-ring"></div>
-                            <span>AI Generator Watcher Active</span>
-                        </div>
-                        <span style="font-size: 12px; color: var(--text-secondary);" id="watcherLastChecked">Checked just now</span>
-                    </div>
-                    <div class="watcher-controls">
-                        <button class="btn-secondary btn-sm" id="soundToggleBtn" onclick="toggleSound()">
-                            🔔 Sound: ON
-                        </button>
-                        <button class="btn-secondary btn-sm" onclick="loadVideos(true)">
-                            🔄 Scan Now
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Hero: Latest Generated Video -->
-                <div class="hero-video-card" id="heroVideoCard" style="display: none;">
-                    <div class="hero-badge-row">
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <span class="newest-tag">✨ Latest Generation</span>
-                            <span class="niche-tag" id="heroNiche">AI Video</span>
-                        </div>
-                        <span style="font-size: 12px; color: var(--text-secondary);" id="heroCompletedTime">Just generated</span>
-                    </div>
-
-                    <div>
-                        <div class="hero-title" id="heroTitle">Generating next video...</div>
-                        <div class="hero-topic" id="heroTopic"></div>
-                    </div>
-
-                    <div class="hero-player-wrapper">
-                        <video id="heroVideoPlayer" controls playsinline preload="metadata">
-                            Your browser does not support HTML5 video streaming.
-                        </video>
-                    </div>
-
-                    <div class="hero-meta-row">
-                        <div class="hero-meta-item">⏱️ <span id="heroDuration">--</span></div>
-                        <div class="hero-meta-item">💾 <span id="heroSize">--</span></div>
-                        <div class="hero-meta-item">📁 <span id="heroFolder">--</span></div>
-                    </div>
-
-                    <div class="hero-actions">
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <a id="heroDownloadBtn" href="#" download class="btn-download-link" style="text-decoration:none;">
-                                <button type="button" class="btn-success">
-                                    ⬇️ Download Video to Phone
-                                </button>
-                            </a>
-                            <button type="button" class="btn-secondary" id="heroScriptToggleBtn" onclick="toggleHeroScript()" style="display:none;">
-                                📜 Read Script
-                            </button>
-                        </div>
-
-                        <div class="speed-control-group">
-                            <span style="font-size: 11px; color: var(--text-secondary); margin-right: 4px;">Speed:</span>
-                            <button type="button" class="speed-btn active" onclick="setPlayerSpeed(1.0, this)">1x</button>
-                            <button type="button" class="speed-btn" onclick="setPlayerSpeed(1.25, this)">1.25x</button>
-                            <button type="button" class="speed-btn" onclick="setPlayerSpeed(1.5, this)">1.5x</button>
-                            <button type="button" class="speed-btn" onclick="setPlayerSpeed(2.0, this)">2x</button>
-                        </div>
-                    </div>
-
-                    <div class="script-drawer" id="heroScriptDrawer"></div>
-                </div>
-
-                <!-- Recent Generations Grid -->
-                <div>
-                    <div class="section-header">
-                        <div class="section-title">
-                            🎬 All Generated Videos
-                            <span style="font-size: 12px; font-weight: normal; color: var(--text-secondary);" id="videoTotalCount"></span>
-                        </div>
-                    </div>
-                    <div class="video-grid" id="videoGrid" style="margin-top: 14px;"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ================= TAB 3: BROWSE PC ================= -->
+        <!-- ================= TAB 2: BROWSE PC ================= -->
         <div class="tab-view" id="tabViewBrowser">
             <div class="file-browser-container">
                 <!-- Toolbar: Breadcrumbs & Search -->
@@ -232,26 +143,11 @@
     </div>
 
     <!-- Video Modal for File Browser Previews -->
-    <div class="video-modal-overlay" id="videoModal" onclick="if(event.target === this) closeVideoModal()">
-        <div class="video-modal-content">
-            <div class="video-modal-header">
-                <div class="video-modal-title" id="videoModalTitle">Video Preview</div>
-                <button class="close-modal-btn" onclick="closeVideoModal()">&times;</button>
-            </div>
-            <div style="width: 100%; background: #000; border-radius: 8px; overflow: hidden;">
-                <video id="modalVideoPlayer" controls playsinline style="width: 100%; max-height: 70vh;"></video>
-            </div>
-            <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                <a id="modalDownloadBtn" href="#" download style="text-decoration: none;">
-                    <button type="button" class="btn-success btn-sm">⬇️ Download</button>
-                </a>
-                <button type="button" class="btn-secondary btn-sm" onclick="closeVideoModal()">Close</button>
-            </div>
-        </div>
-    </div>
+    
 
     <div class="toast-container" id="toastContainer"></div>
 
+    <script>window.ANOTE_IPS = {{IPS_JSON}};</script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>
