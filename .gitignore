@@ -1,0 +1,16 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# User Data & Uploads (Ignored so clones start fresh)
+uploads/*
+!uploads/.gitkeep
+clipboards.json
+
+# Environment / OS & Editor files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.tmp

@@ -1,0 +1,6 @@
+# GitHub Linguist Overrides
+# Mark CSS, JS, and HTML templates as vendored/documentation so Python dominates language stats
+
+static/css/* linguist-vendored
+static/js/* linguist-vendored
+templates/* linguist-vendored

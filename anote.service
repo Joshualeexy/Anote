@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/kodar/Anote
-ExecStart=/usr/bin/python3 /home/kodar/Anote/server.py
+WorkingDirectory=%h/Anote
+ExecStart=/usr/bin/python3 %h/Anote/server.py
 Restart=always
 RestartSec=5
 
